@@ -2,7 +2,7 @@ use anyhow::Context;
 use std::path::PathBuf;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::{command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 
 wasmtime::component::bindgen!({
     path: "add.wit",
@@ -18,15 +18,18 @@ pub async fn add(path: PathBuf, x: i32, y: i32) -> wasmtime::Result<i32> {
     let mut linker = Linker::new(&engine);
 
     // Add the command world (aka WASI CLI) to the linker
-    command::add_to_linker(&mut linker).context("Failed to link command world")?;
+    wasmtime_wasi::add_to_linker_async(&mut linker)
+        .context("Failed to link command world")?;
     let wasi_view = ServerWasiView::new();
     let mut store = Store::new(&engine, wasi_view);
 
-    let component = Component::from_file(&engine, path).context("Component file not found")?;
+    let component = Component::from_file(&engine, path)
+        .context("Component file not found")?;
 
-    let (instance, _) = Example::instantiate_async(&mut store, &component, &linker)
-        .await
-        .context("Failed to instantiate the example world")?;
+    let (instance, _) =
+        Example::instantiate_async(&mut store, &component, &linker)
+            .await
+            .context("Failed to instantiate the example world")?;
     instance
         .call_add(&mut store, x, y)
         .await
